@@ -1,0 +1,30 @@
+# Cargo configuration for optimized CI builds
+[build]
+# Enable parallel builds
+jobs = 4
+
+# Target-specific optimization for Linux
+[target.x86_64-unknown-linux-gnu]
+# Use faster linker for development builds  
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Registry configuration for faster dependency downloads
+[registry.crates-io]
+protocol = "sparse"
+
+# Network configuration for reliability
+[net]
+retry = 10
+git-fetch-with-cli = true
+
+# Cache configuration
+[cargo-new]
+name = "RBFT"
+email = "info@rayls.com"
+
+# Source replacement for potential local mirrors (commented for now)
+# [source.crates-io]
+# replace-with = "mirror"
+# [source.mirror]
+# registry = "https://mirrors.ustc.edu.cn/crates.io-index/"

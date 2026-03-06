@@ -1,0 +1,27 @@
+[package]
+name = "rbft"
+version = "0.9.0"
+edition = "2021"
+license.workspace = true
+
+
+[dependencies]
+# Note: Please keep these dependencies minimal.
+# Especially do not add reth dependencies here.
+
+# Alloy ecosystem for Ethereum compatibility (matching rbft-node versions)
+alloy-primitives = { workspace = true }
+alloy-rlp = { workspace = true }
+alloy-signer = { workspace = true }
+alloy-signer-local = { workspace = true }
+
+# Utility and async libraries
+itertools = "0.13.0"
+tracing = "0.1.40"
+
+# Serialization and utilities
+serde = { version = "1.0.215", features = ["derive"] }
+
+[dev-dependencies]
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rand = "0.8"

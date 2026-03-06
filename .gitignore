@@ -1,0 +1,44 @@
+/target
+/testnet/data
+/testnet/rbft_height
+/.vscode
+.DS_Store
+.env
+crates/rbft-node2/assets/
+rbft-monitor-logs/
+
+# Foundry
+cache/
+artifacts/
+
+# IDE
+.idea/
+testnet/db/d0/jwt.hex
+testnet/db/d0/known-peers.json
+testnet/db/d0/reth.toml
+testnet/db/d0/db/database.version
+testnet/db/d0/db/lock
+testnet/db/d0/db/mdbx.dat
+testnet/db/d0/db/mdbx.lck
+testnet/db/d0/static_files/lock
+testnet/db/d0/static_files/static_file_headers_0_499999
+testnet/db/d0/static_files/static_file_headers_0_499999.conf
+testnet/db/d0/static_files/static_file_headers_0_499999.off
+testnet/db/d0/static_files/static_file_receipts_0_499999
+testnet/db/d0/static_files/static_file_receipts_0_499999.conf
+testnet/db/d0/static_files/static_file_receipts_0_499999.off
+testnet/db/d0/static_files/static_file_transactions_0_499999
+testnet/db/d0/static_files/static_file_transactions_0_499999.conf
+testnet/db/d0/static_files/static_file_transactions_0_499999.off
+testnet/db/d1/jwt.hex
+testnet/db/d1/reth.toml
+testnet/logs/node0.log
+testnet/logs/node1.log
+/logs
+perf.data
+perf.data.old
+generated_accounts.txt
+
+# Foundry/Soldeer dependencies
+lib/
+

@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xargs ls -la)",
+      "Bash(grep -i \"k8s\\\\|kubernetes\\\\|docker\\\\|container\\\\|pod\\\\|cluster\" /Users/pedro/repos/rbft-audit/scripts/kube/*.yaml)"
+    ]
+  }
+}

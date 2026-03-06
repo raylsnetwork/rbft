@@ -1,0 +1,417 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: rbft-monitor
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: rbft-monitor
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "events", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["statefulsets", "statefulsets/scale"]
+    verbs: ["get", "list", "watch", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: rbft-monitor
+subjects:
+  - kind: ServiceAccount
+    name: rbft-monitor
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: rbft-monitor
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: rbft-monitor-logs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rbft-monitor-script
+data:
+  monitor.sh: |
+    #!/bin/sh
+    set -eu
+
+    NAMESPACE="${NAMESPACE:-rbft}"
+    STATEFULSET="${STATEFULSET:-rbft-node}"
+    LABEL_SELECTOR="${LABEL_SELECTOR:-app=rbft-node}"
+    LOG_SOURCE_POD="${LOG_SOURCE_POD:-rbft-node-0}"
+    MEGATX_DEPLOYMENT="${MEGATX_DEPLOYMENT:-rbft-megatx}"
+    RPC_HOST="${RPC_HOST:-rbft-node-0.rbft-node.${NAMESPACE}.svc.cluster.local}"
+    RPC_PORT="${RPC_PORT:-8545}"
+    RPC_URL="${RPC_URL:-http://${RPC_HOST}:${RPC_PORT}}"
+    CHECK_INTERVAL="${CHECK_INTERVAL:-30}"
+    OUTPUT_DIR="${OUTPUT_DIR:-/data/logs}"
+    SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_URL:-}"
+    DISK_ALERT_PERCENT="${DISK_ALERT_PERCENT:-90}"
+
+    log() {
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] $*"
+    }
+
+    notify_slack() {
+      if [ -z "$SLACK_WEBHOOK_URL" ]; then
+        return 0
+      fi
+      if ! command -v curl >/dev/null 2>&1; then
+        log "curl not found; cannot send Slack notification"
+        return 0
+      fi
+      msg="$1"
+      payload="$(printf '{"text":"%s"}' "$msg")"
+      curl -s -X POST -H 'Content-type: application/json' \
+        --data "$payload" \
+        "$SLACK_WEBHOOK_URL" >/dev/null 2>&1 || true
+    }
+
+    setup_kubeconfig() {
+      local host port token ca
+      host="${KUBERNETES_SERVICE_HOST:-}"
+      port="${KUBERNETES_SERVICE_PORT:-}"
+      token="/var/run/secrets/kubernetes.io/serviceaccount/token"
+      ca="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+
+      if [ -z "$host" ] || [ -z "$port" ]; then
+        log "Kubernetes service env vars not set"
+        exit 1
+      fi
+
+      if [ ! -f "$token" ] || [ ! -f "$ca" ]; then
+        log "Service account token or CA not found"
+        exit 1
+      fi
+
+      cat > /tmp/kubeconfig <<EOF_CFG
+    apiVersion: v1
+    kind: Config
+    clusters:
+    - cluster:
+        certificate-authority: $ca
+        server: https://$host:$port
+      name: in-cluster
+    contexts:
+    - context:
+        cluster: in-cluster
+        namespace: $NAMESPACE
+        user: sa
+      name: in-cluster
+    current-context: in-cluster
+    users:
+    - name: sa
+      user:
+        token: $(cat "$token")
+    EOF_CFG
+
+      export KUBECONFIG=/tmp/kubeconfig
+    }
+
+    get_height_rpc() {
+      if ! command -v curl >/dev/null 2>&1; then
+        echo ""
+        return 0
+      fi
+
+      local resp hex
+      resp="$(
+        curl -s -m 5 "$RPC_URL" \
+          -H 'Content-Type: application/json' \
+          -d '{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}' \
+          || true
+      )"
+
+      if [ -z "$resp" ]; then
+        echo ""
+        return 0
+      fi
+
+      hex="$(printf '%s' "$resp" | sed -n 's/.*"result":"\(0x[0-9a-fA-F]*\)".*/\1/p')"
+      if [ -z "$hex" ]; then
+        echo ""
+        return 0
+      fi
+
+      printf '%d' "$((16#${hex#0x}))"
+    }
+
+    get_height_logs() {
+      local line height
+      line="$(
+        kubectl logs -n "$NAMESPACE" "$LOG_SOURCE_POD" \
+          --since="${CHECK_INTERVAL}s" 2>/dev/null \
+          | sed -E 's/\x1b\[[0-9;]*m//g' \
+          | grep -E 'latest_block|\bh=[0-9]+' | tail -n 1 || true
+      )"
+
+      if [ -z "$line" ]; then
+        echo ""
+        return 0
+      fi
+
+      if printf '%s' "$line" | grep -q 'latest_block'; then
+        height="$(
+          printf '%s' "$line" \
+            | sed -n 's/.*latest_block[^0-9]*\([0-9][0-9]*\).*/\1/p'
+        )"
+      else
+        height="$(
+          printf '%s' "$line" \
+            | sed -n 's/.*[[:space:]]h=\([0-9][0-9]*\).*/\1/p'
+        )"
+      fi
+
+      echo "$height"
+    }
+
+    get_pods_info() {
+      local jsonpath
+      jsonpath='{range .items[*]}{.metadata.name}{"\t"}'
+      jsonpath="${jsonpath}{.status.phase}{\"\\t\"}"
+      jsonpath="${jsonpath}{range .status.conditions[?(@.type==\"Ready\")]}{.status}{end}"
+      jsonpath="${jsonpath}{\"\\t\"}{range .status.containerStatuses[*]}{.name}:{.restartCount}"
+      jsonpath="${jsonpath}{\" \"}{end}{\"\\n\"}{end}"
+      kubectl get pods -n "$NAMESPACE" -l "$LABEL_SELECTOR" \
+        -o jsonpath="$jsonpath" 2>/dev/null || true
+    }
+
+    setup_kubeconfig
+    mkdir -p "$OUTPUT_DIR"
+
+    last_height=""
+    capture_reason="stall"
+    capture_detail=""
+    alerted_pods=""
+
+    while true; do
+      now="$(date +%s)"
+
+      pods_info="$(get_pods_info)"
+      if [ -z "$pods_info" ]; then
+        log "No pods found for selector $LABEL_SELECTOR"
+        capture_reason="no-pods"
+        capture_detail="$LABEL_SELECTOR"
+        notify_slack "RBFT monitor: no pods found in ${NAMESPACE}."
+        log "Capturing logs for $capture_reason"
+        break
+      fi
+
+      pods="$(printf '%s\n' "$pods_info" | awk -F '\t' '{print $1}')"
+
+      bad_pods="$(
+        printf '%s\n' "$pods_info" \
+          | awk -F '\t' '($2 != "Running" || $3 != "True"){print $1}'
+      )"
+      if [ -n "$bad_pods" ]; then
+        log "Detected non-ready pods: $bad_pods"
+        capture_reason="pods-not-ready"
+        capture_detail="$bad_pods"
+        notify_slack "RBFT monitor: non-ready pods in ${NAMESPACE}: ${bad_pods}."
+        log "Capturing logs for $capture_reason"
+        break
+      fi
+
+      if [ -n "$pods" ]; then
+        for pod in $pods; do
+          usage="$(
+            kubectl exec -n "$NAMESPACE" "$pod" -- sh -c \
+              "df -h /data 2>/dev/null | awk 'NR==2{gsub(/%/,\"\",\$5);print \$5}'" \
+              2>/dev/null || true
+          )"
+          if [ -n "$usage" ] && [ "$usage" -ge "$DISK_ALERT_PERCENT" ]; then
+            if ! printf ' %s ' "$alerted_pods" | grep -q " $pod "; then
+              alert_msg="RBFT monitor: disk usage ${usage}% on ${pod} in ${NAMESPACE}."
+              log "$alert_msg"
+              notify_slack "$alert_msg"
+              alerted_pods="$alerted_pods $pod"
+            fi
+          fi
+        done
+      fi
+
+      height=""
+      if command -v curl >/dev/null 2>&1; then
+        height="$(get_height_rpc)"
+        if [ -z "$height" ]; then
+          log "RPC height unavailable; falling back to logs"
+          height="$(get_height_logs)"
+        fi
+      else
+        height="$(get_height_logs)"
+      fi
+
+      if [ -z "$height" ]; then
+        log "Height unavailable; capturing logs"
+        capture_reason="height-unavailable"
+        capture_detail="no-height"
+        notify_slack "RBFT monitor: height unavailable in ${NAMESPACE}."
+        break
+      fi
+
+      if [ -z "$last_height" ]; then
+        last_height="$height"
+        log "Initial block height: $height"
+      elif [ "$height" = "$last_height" ]; then
+        log "No new blocks at height $height"
+        capture_reason="stall"
+        capture_detail="height $height unchanged"
+        notify_slack "RBFT stall detected in ${NAMESPACE} (height ${height})."
+        log "Capturing logs for $capture_reason"
+        break
+      else
+        last_height="$height"
+        log "New block height: $height"
+      fi
+
+      sleep "$CHECK_INTERVAL"
+    done
+
+    ts="$(date -u +%Y%m%d-%H%M%S)"
+    out_dir="$OUTPUT_DIR/$ts"
+    mkdir -p "$out_dir"
+
+    printf '%s\n' "$capture_reason" > "$out_dir/reason.txt"
+    if [ -n "$capture_detail" ]; then
+      printf '%s\n' "$capture_detail" > "$out_dir/reason_detail.txt"
+    fi
+
+    printf '%s\n' "$pods_info" > "$out_dir/pods_status.txt" 2>/dev/null || true
+
+    pods="$(kubectl get pods -n "$NAMESPACE" -l "$LABEL_SELECTOR" \
+      -o jsonpath='{.items[*].metadata.name}')"
+
+    for pod in $pods; do
+      log "Collecting logs from $pod"
+      if kubectl exec -n "$NAMESPACE" "$pod" -- sh -c \
+        "test -f /data/logs/node.log"; then
+        kubectl exec -n "$NAMESPACE" "$pod" -- sh -c \
+          "cat /data/logs/node.log" > "$out_dir/$pod.log" 2>&1 || true
+      else
+        kubectl logs -n "$NAMESPACE" "$pod" > "$out_dir/$pod.log" 2>&1 || true
+      fi
+
+      kubectl describe pod -n "$NAMESPACE" "$pod" \
+        > "$out_dir/$pod.describe.txt" 2>&1 || true
+
+      kubectl get pod -n "$NAMESPACE" "$pod" -o yaml \
+        > "$out_dir/$pod.yaml" 2>&1 || true
+
+      kubectl exec -n "$NAMESPACE" "$pod" -- sh -c \
+        "df -h /data; df -i /data; du -sh /data/db" \
+        > "$out_dir/$pod.disk.txt" 2>&1 || true
+    done
+
+    kubectl get events -n "$NAMESPACE" --sort-by=.lastTimestamp \
+      > "$out_dir/events.txt" 2>&1 || true
+
+    kubectl get pvc -n "$NAMESPACE" \
+      > "$out_dir/pvc.txt" 2>&1 || true
+
+    kubectl get pods -n "$NAMESPACE" -l "$LABEL_SELECTOR" -o wide \
+      > "$out_dir/pods.txt" 2>&1 || true
+
+    kubectl get statefulset "$STATEFULSET" -n "$NAMESPACE" -o yaml \
+      > "$out_dir/statefulset.yaml" 2>&1 || true
+    kubectl get deployment "$MEGATX_DEPLOYMENT" -n "$NAMESPACE" -o yaml \
+      > "$out_dir/${MEGATX_DEPLOYMENT}.yaml" 2>&1 || true
+
+    log "Scaling $STATEFULSET to 0"
+    kubectl scale statefulset "$STATEFULSET" -n "$NAMESPACE" --replicas=0
+    if kubectl get deployment "$MEGATX_DEPLOYMENT" -n "$NAMESPACE" >/dev/null 2>&1; then
+      log "Scaling $MEGATX_DEPLOYMENT to 0"
+      kubectl scale deployment "$MEGATX_DEPLOYMENT" -n "$NAMESPACE" --replicas=0
+    else
+      log "No deployment $MEGATX_DEPLOYMENT found; skipping"
+    fi
+
+    log "Log capture complete: $out_dir"
+    notify_slack "RBFT logs captured to ${out_dir}; ${STATEFULSET} scaled to 0."
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: rbft-monitor
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      serviceAccountName: rbft-monitor
+      restartPolicy: Never
+      securityContext:
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+      initContainers:
+        - name: init-perms
+          image: busybox
+          command: ["sh", "-c"]
+          args:
+            - |
+              mkdir -p /data/logs
+              chmod -R g+rwX /data
+              chown -R 1000:1000 /data
+          securityContext:
+            runAsUser: 0
+          volumeMounts:
+            - name: logs
+              mountPath: /data
+      containers:
+        - name: rbft-monitor
+          image: bitnami/kubectl:latest
+          command: ["/bin/sh", "/scripts/monitor.sh"]
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: STATEFULSET
+              value: "rbft-node"
+            - name: LABEL_SELECTOR
+              value: "app=rbft-node"
+            - name: LOG_SOURCE_POD
+              value: "rbft-node-0"
+            - name: MEGATX_DEPLOYMENT
+              value: "rbft-megatx"
+            - name: RPC_PORT
+              value: "8545"
+            - name: CHECK_INTERVAL
+              value: "30"
+            - name: OUTPUT_DIR
+              value: "/data/logs"
+            - name: DISK_ALERT_PERCENT
+              value: "90"
+            - name: SLACK_WEBHOOK_URL
+              valueFrom:
+                secretKeyRef:
+                  name: rbft-monitor-slack
+                  key: url
+                  optional: true
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+            - name: logs
+              mountPath: /data
+      volumes:
+        - name: scripts
+          configMap:
+            name: rbft-monitor-script
+            defaultMode: 0755
+        - name: logs
+          persistentVolumeClaim:
+            claimName: rbft-monitor-logs

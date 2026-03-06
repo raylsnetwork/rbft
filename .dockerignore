@@ -1,0 +1,56 @@
+# Build artifacts and cache
+target/
+.cargo/
+
+# Git and version control
+.git/
+.gitignore
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+run.log
+
+# Node.js (if any)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testnet data
+testnet/
+testnet/keys/
+/tmp/
+generated_accounts.txt
+
+# Documentation and development files
+README.md
+DOCKER_PIPELINE_SUMMARY.md
+.github/README.md
+doc/
+
+# Docker files (to avoid recursion)
+Dockerfile*
+.dockerignore
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Temporary files
+*.tmp
+*.temp
+
+# Monitoring data
+monitoring/

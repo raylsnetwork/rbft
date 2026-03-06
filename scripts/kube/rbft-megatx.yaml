@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rbft-megatx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rbft-megatx
+  template:
+    metadata:
+      labels:
+        app: rbft-megatx
+    spec:
+      containers:
+        - name: rbft-megatx
+          # Override image registry via RBFT_REGISTRY env var or update this field directly.
+          image: ghcr.io/raylsnetwork/rbft-megatx:latest
+          imagePullPolicy: Always
+          env:
+            - name: RPC_URLS
+              value: ""
+            - name: MEGATX_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: MEGATX_STATEFULSET
+              value: "rbft-node"
+            - name: MEGATX_RPC_PORT
+              value: "8545"
+            - name: MEGATX_NUM_NODES
+              value: "4"
+            - name: MEGATX_NUM_TXS
+              value: "20000"
+            - name: MEGATX_BATCH_SIZE
+              value: "1000"
+            - name: MEGATX_MAX_TXS_PER_ACCOUNT
+              value: "16"
+            - name: MEGATX_FUNDING_AMOUNT
+              value: "1000000000000000000"
+            - name: MEGATX_TARGET_TPS
+              value: "0"
+            - name: MEGATX_MAX_WAIT_SECONDS
+              value: "30"
+            - name: MEGATX_SLEEP_SECONDS
+              value: "0"
+            - name: MEGATX_PRIVATE_KEY
+              # Must be provided via a Kubernetes Secret — do not hard-code here.
+              # Example: kubectl create secret generic megatx-key --from-literal=key=0x...
+              # Then reference with secretKeyRef.
+              value: ""
+            - name: MEGATX_TO_ADDRESS
+              value: "0xE4924AE4907A883EE6C3295b1340929983DBd8E5"
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -e
+              if [ -z "${RPC_URLS}" ]; then
+                urls=""
+                i=0
+                while [ "$i" -lt "${MEGATX_NUM_NODES}" ]; do
+                  host="http://${MEGATX_STATEFULSET}-${i}."
+                  host="${host}${MEGATX_STATEFULSET}.${MEGATX_NAMESPACE}.svc.cluster.local"
+                  host="${host}:${MEGATX_RPC_PORT}"
+                  if [ -z "$urls" ]; then
+                    urls="$host"
+                  else
+                    urls="${urls},${host}"
+                  fi
+                  i=$((i + 1))
+                done
+                RPC_URLS="$urls"
+              fi
+              while true; do
+                /app/rbft-megatx spam \
+                  -n "${MEGATX_NUM_TXS}" \
+                  -u "${RPC_URLS}" \
+                  -b "${MEGATX_BATCH_SIZE}" \
+                  --max-txs-per-account "${MEGATX_MAX_TXS_PER_ACCOUNT}" \
+                  --funding-amount "${MEGATX_FUNDING_AMOUNT}" \
+                  --target-tps "${MEGATX_TARGET_TPS}" \
+                  --max-wait-seconds "${MEGATX_MAX_WAIT_SECONDS}" \
+                  -k "${MEGATX_PRIVATE_KEY}" \
+                  -t "${MEGATX_TO_ADDRESS}"
+                if [ "${MEGATX_SLEEP_SECONDS}" -gt 0 ]; then
+                  sleep "${MEGATX_SLEEP_SECONDS}"
+                fi
+              done

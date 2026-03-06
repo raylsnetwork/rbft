@@ -1,0 +1,71 @@
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: always
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: always
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      # Local development only — change credentials for any non-local deployment.
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - grafana-data:/var/lib/grafana
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring
+
+  exporter:
+    build: ./exporter
+    container_name: exporter
+    environment:
+      RPC_URLS: >-
+        v0=http://host.docker.internal:8542,
+        v1=http://host.docker.internal:8543,
+        v2=http://host.docker.internal:8544,
+        v3=http://host.docker.internal:8545
+      INSTANCE: v0
+      EXPORTER_PORT: 9102
+      GENESIS_PATH: /host/genesis.json
+      SCRAPE_INTERVAL: 2
+      BALANCE_EVERY_N: 6
+      DB_PATH: /data/state.sqlite3
+    volumes:
+      - ./crates/rbft-node/assets/genesis.json:/host/genesis.json:ro
+      - exporter-data:/data
+    ports:
+      - "9102:9102"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  grafana-data:
+  exporter-data:

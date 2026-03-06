@@ -1,0 +1,83 @@
+[package]
+name = "rbft-node"
+version = "0.0.0"
+edition = "2021"
+license.workspace = true
+
+[dependencies]
+# Memory allocator - jemalloc for better memory management in long-running processes
+tikv-jemallocator = "0.6"
+
+# Internal dependencies
+rbft = { path = "../rbft" }
+rbft-utils = { path = "../rbft-utils" }
+reth-basic-payload-builder = { workspace = true }
+reth-payload-builder = { workspace = true }
+reth-ethereum = { workspace = true, features = [
+    "node",
+    "pool",
+    "cli",
+] }
+reth-ethereum-payload-builder = { workspace = true }
+reth-ethereum-primitives = { workspace = true }
+reth-consensus-debug-client = { workspace = true }
+reth-consensus-common = { workspace = true }
+reth-tasks = { workspace = true }
+reth-network-peers = { workspace = true, features = [
+    "secp256k1",
+] }
+
+alloy-eips = { workspace = true }
+alloy-genesis = { workspace = true }
+alloy-primitives = { workspace = true }
+alloy-consensus = { workspace = true }
+alloy-provider = { workspace = true }
+alloy-rpc-types-eth = { workspace = true }
+alloy-rpc-types-engine = { workspace = true }
+tracing = { version = "0.1.0", default-features = false }
+futures-util = { version = "0.3", default-features = false }
+eyre = "0.6"
+serde_json = "1.0.143"
+tokio = { version = "1.47.1", features = ["full"] }
+clap = "4.5.47"
+alloy-rpc-client = { workspace = true }
+alloy-rpc-types = { workspace = true }
+futures = "0.3.31"
+alloy-signer-local = { workspace = true }
+alloy-signer = { workspace = true }
+tokio-stream = "0.1.17"
+serde = { version = "1.0.226", features = ["derive"] }
+alloy-sol-types = { workspace = true }
+alloy-sol-macro = { workspace = true }
+hex = "0.4"
+
+# Tower service dependencies
+tower = "0.5.1"
+tower-http = { version = "0.6.2", features = ["cors"] }
+hyper = { version = "1.0", features = ["full"] }
+hyper-util = { version = "0.1", features = ["full"] }
+http-body-util = "0.1"
+alloy-rlp = { workspace = true }
+secp256k1 = "0.30.0"
+itertools = "0.14.0"
+
+prometheus = "0.14"
+lazy_static = "1.4"
+warp = "0.3"
+
+# For genesis contract initialization
+revm = { version = "24", default-features = false, features = ["std"] }
+
+# For compiling Foundry contracts
+foundry-compilers = "0.11"
+toml = "0.8"
+soldeer-core = "0.5"
+
+[build-dependencies]
+# Build dependencies compatibility (for reth node core)
+vergen = "9.1.0"
+vergen-git2 = "1.0.7"
+
+[dev-dependencies]
+tracing-subscriber = "0.3"
+reth-provider = { workspace = true, features = ["test-utils"] }

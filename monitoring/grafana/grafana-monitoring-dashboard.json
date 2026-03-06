@@ -1,0 +1,229 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 7,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": "Validator Overview",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "displayMode": "auto",
+            "filterable": false
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "options": {
+                      "from": 0,
+                      "to": 60
+                    },
+                    "result": {
+                      "color": "green",
+                      "index": 0,
+                      "text": "Up"
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 60,
+                      "to": 600
+                    },
+                    "result": {
+                      "color": "yellow",
+                      "index": 1,
+                      "text": "Stale"
+                    },
+                    "type": "range"
+                  },
+                  {
+                    "options": {
+                      "from": 600,
+                      "to": 1000000
+                    },
+                    "result": {
+                      "color": "red",
+                      "index": 2,
+                      "text": "Down"
+                    },
+                    "type": "range"
+                  }
+                ]
+              },
+              {
+                "id": "custom.displayMode",
+                "value": "color-text"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Height"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Txs"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "none"
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "footer": {
+          "fields": "",
+          "reducer": [
+            "sum"
+          ],
+          "show": false
+        },
+        "frameIndex": 0,
+        "showHeader": true
+      },
+      "pluginVersion": "12.2.0",
+      "targets": [
+        {
+          "expr": "topk(15, rbft_block_height)",
+          "instant": true,
+          "legendFormat": "{{instance}}",
+          "refId": "A"
+        },
+        {
+          "expr": "clamp_min(clamp_max(time() - timestamp(topk(15, rbft_block_height)), 3600), 0)",
+          "instant": true,
+          "hide": false,
+          "legendFormat": "{{instance}}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum by (instance) (rbft_state_transactions * on(instance) group_right topk(15, rbft_block_height))",
+          "instant": true,
+          "legendFormat": "{{instance}}",
+          "refId": "C"
+        }
+      ],
+      "title": "Validator Status",
+      "transformations": [
+        {
+          "id": "merge",
+          "options": {
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "__name__": true,
+              "exported_instance": true,
+              "job": true,
+              "Field": true,
+              "Field 1": true,
+              "Field 2": true,
+              "Time": true,
+              "Time 1": true,
+              "Time 2": true
+            },
+            "indexByName": {
+              "Value": 2,
+              "Value 1": 3,
+              "Value 2": 4,
+              "instance": 0
+            },
+            "renameByName": {
+              "Value": "Height",
+              "Value 1": "Status",
+              "Value 2": "Txs",
+              "instance": "Validator"
+            }
+          }
+        }
+      ],
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "refresh": "5s",
+  "schemaVersion": 42,
+  "tags": [
+    "rbft",
+    "testnet",
+    "validators"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-5m",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "RBFT Testnet Validators View",
+  "uid": "qbft-data-validators",
+  "version": 4
+}
