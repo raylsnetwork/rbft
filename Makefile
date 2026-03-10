@@ -7,6 +7,7 @@ help:
 	@echo "  testnet_restart      - Restart the testnet"
 	@echo "  testnet_load_test    - Start testnet with transaction load testing and auto-exit"
 	@echo "  testnet_follower_test - Start testnet and add follower nodes at blocks 5 and 15, exit at block 30"
+	@echo "  testnet-follower     - Run a follower node against a running testnet (uses enodes from nodes.csv)"
 	@echo "  genesis              - Generate a genesis file"
 	@echo "  node-gen             - Generate node enodes and secret keys in CSV format"
 	@echo "  node-help            - Show help for the rbft-node binary"
@@ -200,6 +201,18 @@ testnet_load_test:
 		--extra-args "--rpc-cache.max-headers 100"
 	target/release/rbft-utils logjam -q
 
+# Run a minimal test follower node against an already-running testnet.
+# Assumes the testnet was started with node-gen and genesis commands so nodes.csv and genesis.json exist in ASSETS_DIR.
+# You may need to remove the reth database directory for the follower node to start successfully.
+#
+# --trusted-peers is set to all the enodes from nodes.csv for simplicity, but in a real scenario you would typically only trust a subset of validators.
+# --chain is set to the same genesis file as the main testnet to ensure it can sync properly, but in a real scenario you would typically use a more minimal genesis for followers.
+testnet_follower:
+	$(CARGO) build --release --bin rbft-node
+	target/release/rbft-node node --port 12345 \
+		--chain $(ASSETS_DIR)/genesis.json \
+		--trusted-peers "$$(awk -F',' 'NR>1{printf "%s%s",sep,$$5; sep=","}' $(ASSETS_DIR)/nodes.csv)"
+
 genesis:
 	mkdir -p $(ASSETS_DIR)
 	$(CARGO) run --release --bin rbft-utils -- genesis --assets-dir $(ASSETS_DIR)
@@ -331,4 +344,4 @@ docker-tag-registry:
 .PHONY: help docker-validate docker-build docker-build-dev docker-build-debug docker-run \
 	docker-run-dev docker-test docker-clean test fmt clippy clean docker-tag-registry \
 	dafny-translate validator_status status testnet_start testnet_restart genesis node-help \
-	megatx validator-inspector testnet_load_test testnet_follower_test testnet_debug
+	megatx validator-inspector testnet_load_test testnet_follower_test testnet_debug testnet-follower

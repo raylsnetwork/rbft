@@ -52,6 +52,49 @@ This will:
 
 The nodes will log to `~/.rbft/testnet/logs/` and store data in `~/.rbft/testnet/db/`.
 
+### Running a Follower Node
+
+A follower node connects to an existing validator network, receives blocks, and keeps a
+full copy of the chain. It does not participate in consensus (no `--validator-key`), so it
+can be added to or removed from the network at any time without affecting liveness.
+
+Before running a follower you need:
+- A running RBFT testnet (e.g. started with `make testnet_start`)
+- The `genesis.json` and `nodes.csv` from the testnet assets directory
+  (default: `~/.rbft/testnet/assets/`)
+
+Extract the validator enode URLs from `nodes.csv` (column 5):
+
+```bash
+ENODES=$(awk -F',' 'NR>1{printf "%s%s",sep,$5; sep=","}' ~/.rbft/testnet/assets/nodes.csv)
+```
+
+Then start the follower:
+
+```bash
+target/release/rbft-node node \
+  --chain ~/.rbft/testnet/assets/genesis.json \
+  --datadir /tmp/rbft-follower \
+  --port 12345 \
+  --authrpc.port 8651 \
+  --http --http.port 8600 \
+  --disable-discovery \
+  --trusted-peers "$ENODES"
+```
+
+Key flags:
+- `--chain` — path to the shared `genesis.json` (must match the running network)
+- `--datadir` — a fresh directory for the follower's database; must not be shared with
+  a validator
+- `--port` — P2P listen port; pick one that does not conflict with the validator nodes
+  (default validator ports start at 30303)
+- `--authrpc.port` — engine API port; also must not conflict (validator default: 8551+)
+- `--disable-discovery` — prevents unwanted discv4/discv5 discovery; peers are supplied
+  explicitly via `--trusted-peers`
+- `--trusted-peers` — comma-separated enode URLs of the validators to connect to
+- `--validator-key` is intentionally **omitted** — its absence is what makes this a
+  follower
+
 ### Installing Cast (Foundry)
 
 Cast is a useful tool for interacting with the blockchain:
