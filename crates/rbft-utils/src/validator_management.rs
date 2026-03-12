@@ -25,8 +25,10 @@ pub fn keygen_validator(ip: &str, port: u16) -> Result<()> {
     // Generate validator key
     let validator_signer = PrivateKeySigner::random();
     let validator_address = validator_signer.address();
-    let validator_private_key =
-        format!("0x{}", alloy_primitives::hex::encode(validator_signer.to_bytes()));
+    let validator_private_key = format!(
+        "0x{}",
+        alloy_primitives::hex::encode(validator_signer.to_bytes())
+    );
 
     // Generate P2P secret key
     let p2p_secret_key = reth_ethereum::network::config::rng_secret_key();

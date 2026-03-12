@@ -1287,8 +1287,8 @@ fn add_next_follower(
     let p2p_key_path = assets.join(format!("p2p-secret-key{follower_node_index}.txt"));
     if !p2p_key_path.exists() {
         return Err(eyre::eyre!(
-            "Missing p2p key file for follower node index {follower_node_index}: expected {} \
-             in {}. Re-generate with a larger --num-nodes to create more key slots.",
+            "Missing p2p key file for follower node index {follower_node_index}: expected {} in \
+             {}. Re-generate with a larger --num-nodes to create more key slots.",
             p2p_key_path.display(),
             assets.display(),
         ));
