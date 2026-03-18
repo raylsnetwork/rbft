@@ -2402,11 +2402,7 @@ fn test_follower_catches_up() {
     }
 
     // Validators should have produced blocks.
-    let validator_min_height = swarm.nodes()[..4]
-        .iter()
-        .map(|n| n.height())
-        .min()
-        .unwrap();
+    let validator_min_height = swarm.nodes()[..4].iter().map(|n| n.height()).min().unwrap();
     assert!(
         validator_min_height >= 2,
         "Validators should produce at least 2 blocks, got {validator_min_height}"
@@ -2416,7 +2412,8 @@ fn test_follower_catches_up() {
     let follower_height = swarm.node(follower_idx).height();
     assert_eq!(
         follower_height, validator_min_height,
-        "Follower height {follower_height} should match validator min height {validator_min_height}"
+        "Follower height {follower_height} should match validator min height \
+         {validator_min_height}"
     );
 
     // Follower is still a follower (no private key, not a validator).
@@ -2468,17 +2465,14 @@ fn test_follower_late_join() {
         }
     }
 
-    let validator_min_height = swarm.nodes()[..4]
-        .iter()
-        .map(|n| n.height())
-        .min()
-        .unwrap();
+    let validator_min_height = swarm.nodes()[..4].iter().map(|n| n.height()).min().unwrap();
 
     // Follower catches up with the tip.
     let follower_height = swarm.node(follower_idx).height();
     assert_eq!(
         follower_height, validator_min_height,
-        "Late-joining follower height {follower_height} should match validator min height {validator_min_height}"
+        "Late-joining follower height {follower_height} should match validator min height \
+         {validator_min_height}"
     );
 
     // Follower emitted zero messages.
