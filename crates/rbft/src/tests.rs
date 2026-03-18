@@ -61,6 +61,7 @@ struct NodeSwarm {
     private_keys: Vec<B256>,
     enabled: Vec<bool>,
     messages_in_transit: Vec<DelayedMessage>,
+    message_counts: Vec<usize>,
 }
 
 impl NodeSwarm {
@@ -131,7 +132,32 @@ impl NodeSwarm {
             private_keys,
             enabled: vec![true; num_nodes],
             messages_in_transit: vec![],
+            message_counts: vec![0; num_nodes],
         }
+    }
+
+    /// Add a follower node to the swarm. The follower has no private key and is
+    /// not in the validator set, so it only processes NewBlock messages.
+    /// Returns the index of the new follower node.
+    fn add_follower(&mut self) -> usize {
+        use alloy_signer_local::PrivateKeySigner;
+
+        let index = self.nodes.len();
+        let private_key = B256::from([(index + 1) as u8; 32]);
+        let signer =
+            PrivateKeySigner::from_bytes(&private_key).expect("Private key should be valid");
+        let follower_id = signer.address();
+
+        let reference_node = &self.nodes[0];
+        let configuration = reference_node.configuration().clone();
+        let genesis_block = configuration.genesis_block.clone();
+        let blockchain = Blockchain::new(VecDeque::from([genesis_block]));
+
+        let node = NodeState::new(blockchain, configuration, follower_id, None, 0);
+        self.nodes.push(node);
+        self.enabled.push(true);
+        self.message_counts.push(0);
+        index
     }
 
     /// Get one of the nodes in the swarm. Panics if index is out of bounds.
@@ -194,6 +220,7 @@ impl NodeSwarm {
                     let o = summarise_messages(out.iter().map(|m| &m.message), quorum_size);
                     info!(target: "swarm", "{after} -> {o}");
                 }
+                self.message_counts[i] += out.len();
                 outgoing.extend(out);
             }
         }
@@ -2352,5 +2379,111 @@ fn provoke_upon_round_change_case_2() {
     assert!(
         min_height >= expected_blocks,
         "At least {expected_blocks} blocks should have been produced, but got {min_height}"
+    );
+}
+
+/// Test that a follower node correctly catches up with the chain tip,
+/// does not emit any consensus messages, and remains connected.
+///
+/// Verifies GitHub issue #2 requirements:
+/// * Follower does not disconnect.
+/// * Follower does not consume excess bandwidth.
+/// * Follower correctly catches up with the tip.
+#[test]
+fn test_follower_catches_up() {
+    setup_tracing();
+    let mut swarm = NodeSwarm::new(4);
+    let follower_idx = swarm.add_follower();
+
+    for t in 0..20 {
+        for tick in 0..NodeSwarm::TICKS_PER_SECOND {
+            swarm.tick(t, tick);
+        }
+    }
+
+    // Validators should have produced blocks.
+    let validator_min_height = swarm.nodes()[..4]
+        .iter()
+        .map(|n| n.height())
+        .min()
+        .unwrap();
+    assert!(
+        validator_min_height >= 2,
+        "Validators should produce at least 2 blocks, got {validator_min_height}"
+    );
+
+    // Follower catches up with the tip.
+    let follower_height = swarm.node(follower_idx).height();
+    assert_eq!(
+        follower_height, validator_min_height,
+        "Follower height {follower_height} should match validator min height {validator_min_height}"
+    );
+
+    // Follower is still a follower (no private key, not a validator).
+    assert!(
+        swarm.node(follower_idx).private_key().is_none(),
+        "Follower should have no private key"
+    );
+    assert!(
+        swarm.node(follower_idx).validator_index().is_none(),
+        "Follower should not be in the validator set"
+    );
+
+    // Follower emitted zero messages (no bandwidth consumption).
+    assert_eq!(
+        swarm.message_counts[follower_idx], 0,
+        "Follower should not emit any messages"
+    );
+}
+
+/// Test that a follower node joining mid-chain catches up with validators.
+/// Simulates a late-joining follower that starts from genesis while
+/// validators have already produced blocks.
+#[test]
+fn test_follower_late_join() {
+    setup_tracing();
+    let mut swarm = NodeSwarm::new(4);
+
+    // Run validators for a while to produce blocks.
+    for t in 0..10 {
+        for tick in 0..NodeSwarm::TICKS_PER_SECOND {
+            swarm.tick(t, tick);
+        }
+    }
+
+    let height_before_follower = swarm.min_height();
+    assert!(
+        height_before_follower >= 1,
+        "Validators should produce blocks before follower joins"
+    );
+
+    // Add a follower that starts from genesis (height 1, ready for block 1).
+    let follower_idx = swarm.add_follower();
+    assert_eq!(swarm.node(follower_idx).height(), 1);
+
+    // Continue running so the follower can catch up.
+    for t in 10..30 {
+        for tick in 0..NodeSwarm::TICKS_PER_SECOND {
+            swarm.tick(t, tick);
+        }
+    }
+
+    let validator_min_height = swarm.nodes()[..4]
+        .iter()
+        .map(|n| n.height())
+        .min()
+        .unwrap();
+
+    // Follower catches up with the tip.
+    let follower_height = swarm.node(follower_idx).height();
+    assert_eq!(
+        follower_height, validator_min_height,
+        "Late-joining follower height {follower_height} should match validator min height {validator_min_height}"
+    );
+
+    // Follower emitted zero messages.
+    assert_eq!(
+        swarm.message_counts[follower_idx], 0,
+        "Late-joining follower should not emit any messages"
     );
 }
