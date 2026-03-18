@@ -846,8 +846,10 @@ pub async fn testnet(
         .parse()
         .expect("admin_key is not a valid private key");
 
+    let node_urls_str = urls.join(",");
+
     let mut providers = Vec::new();
-    for url in urls {
+    for url in &urls {
         let provider = ProviderBuilder::new()
             .wallet(signer.clone())
             .connect_http(url.parse().expect("node URL is not valid"));
@@ -876,14 +878,9 @@ pub async fn testnet(
         let megatx_log_file =
             std::fs::File::create(&megatx_log_path).expect("Failed to create megatx LOG file");
 
-        let megatx_cmd = Command::new("make")
-            .arg("-s")
-            .arg("megatx")
-            .current_dir(std::env::current_dir().expect("Failed to get current directory"))
-            .env(
-                "RBFT_ADMIN_KEY",
-                std::env::var("RBFT_ADMIN_KEY").unwrap_or_else(|_| DEFAULT_ADMIN_KEY.to_string()),
-            )
+        let megatx_exe = exe_dir.join("rbft-megatx");
+        let megatx_cmd = Command::new(&megatx_exe)
+            .args(["spam", "-n", "100000", "-u", &node_urls_str])
             .stdout(std::process::Stdio::from(megatx_json_file))
             .stderr(std::process::Stdio::from(megatx_log_file))
             .kill_on_drop(true)
