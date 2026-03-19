@@ -40,6 +40,7 @@ help:
 	@echo "  fmt                  - Format code"
 	@echo "  clippy               - Run clippy lints"
 	@echo "  clean                - Clean build artifacts"
+	@echo "  book                 - Build the user documentation (mdbook)"
 	@echo ""
 	@echo "Environment Variables:"
 	@echo ""
@@ -328,6 +329,10 @@ clippy:
 
 clean:
 	$(CARGO) clean
+
+.PHONY: book
+book:
+	mdbook build book
 
 # Dafny commands
 dafny-translate:
