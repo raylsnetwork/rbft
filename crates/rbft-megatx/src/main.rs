@@ -57,7 +57,7 @@ struct SpamArgs {
     urls: String,
 
     /// Batch size (number of transactions per request)
-    #[arg(short = 'b', long, default_value = "1000")]
+    #[arg(short = 'b', long, env = "RBFT_MEGATX_BATCH_SIZE", default_value = "1000")]
     batch_size: usize,
 
     /// Max transactions per account (auto-calculates number of accounts).

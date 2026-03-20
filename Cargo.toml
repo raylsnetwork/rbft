@@ -3,21 +3,25 @@ members = ["crates/rbft-node", "crates/rbft", "crates/rbft-validator-inspector",
 resolver = "2"
 
 [workspace.package]
-edition = "2021"
+edition = "2024"
+version = "1.10.1"
+rust-version = "1.88"
 license = "Apache-2.0"
+homepage = "https://paradigmxyz.github.io/reth"
+repository = "https://github.com/paradigmxyz/reth"
 
 [workspace.dependencies]
 # Reth dependencies
-reth-basic-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-ethereum = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-ethereum-payload-builder = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-ethereum-primitives = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-consensus-debug-client = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-consensus-common = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-tasks = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-network-peers = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
-reth-provider = { git = "https://github.com/paradigmxyz/reth", tag = "v1.10.1" }
+reth-basic-payload-builder = { path = "/home/amy/play/reth/crates/payload/basic" }
+reth-payload-builder = { path = "/home/amy/play/reth/crates/payload/builder" }
+reth-ethereum = { path = "/home/amy/play/reth/crates/ethereum/reth" }
+reth-ethereum-payload-builder = { path = "/home/amy/play/reth/crates/ethereum/payload" }
+reth-ethereum-primitives = { path = "/home/amy/play/reth/crates/ethereum/primitives" }
+reth-consensus-debug-client = { path = "/home/amy/play/reth/crates/consensus/debug-client" }
+reth-consensus-common = { path = "/home/amy/play/reth/crates/consensus/common" }
+reth-tasks = { path = "/home/amy/play/reth/crates/tasks" }
+reth-network-peers = { path = "/home/amy/play/reth/crates/net/peers" }
+reth-provider = { path = "/home/amy/play/reth/crates/storage/provider" }
 
 # Alloy dependencies
 alloy-consensus = { version = "1.4.3", default-features = false }
@@ -36,4 +40,6 @@ alloy-signer = "1.4.3"
 alloy-signer-local = "1.4.3"
 alloy-sol-macro = "1.4.3"
 alloy-sol-types = "1.4.3"
+
+[workspace.lints]
 
