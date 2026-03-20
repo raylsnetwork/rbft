@@ -79,8 +79,8 @@ Terminal UI for real-time validator monitoring.
 
 ## Fault tolerance
 
-With `n` validators, RBFT tolerates `f = ⌊(n-1)/3⌋` Byzantine faults.
-The quorum size is `⌈(2n+1)/3⌉`.
+With `n` validators, RBFT tolerates `f = (n-1) / 3` Byzantine faults.
+The quorum size is `(2n - 1) / 3 + 1`.
 
 | Validators | Max faults | Quorum |
 |---|---|---|

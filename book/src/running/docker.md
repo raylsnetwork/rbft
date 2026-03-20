@@ -53,5 +53,5 @@ docker run --rm --name rbft-node-0 \
 ## Pushing to a registry
 
 ```bash
-RBFT_REGISTRY=your-registry.example.com make docker-push
+RBFT_REGISTRY=your-registry.example.com make docker-tag-registry
 ```

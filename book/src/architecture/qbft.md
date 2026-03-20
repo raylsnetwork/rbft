@@ -54,20 +54,23 @@ Default values:
 
 ## Proposer election
 
-The proposer for a given round is determined by:
+The proposer for round 0 at a given height is the validator after the previous
+block's proposer (wrapping around). For subsequent rounds, the index advances
+by the round number:
 
 ```
-proposer_index = (height + round) % num_validators
+round_zero_index = index_of(previous_proposer) + 1
+proposer_index = (round_zero_index + round) % num_validators
 ```
 
-This ensures fair rotation across validators and rounds.
+At height 1, the first validator (index 0) proposes.
 
 ## Quorum and fault tolerance
 
 For `n` validators:
 
-- Maximum Byzantine faults tolerated: `f = ⌊(n-1)/3⌋`
-- Quorum size: `q = ⌈(2n+1)/3⌉`
+- Maximum Byzantine faults tolerated: `f = (n-1) / 3`
+- Quorum size: `q = (2n - 1) / 3 + 1`
 
 The protocol guarantees safety (no conflicting blocks are finalized) as long as
 at most `f` validators are faulty. It guarantees liveness as long as at least
