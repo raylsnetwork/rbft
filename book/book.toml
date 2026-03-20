@@ -1,0 +1,11 @@
+[book]
+authors = ["Rayls Network"]
+language = "en"
+src = "src"
+title = "RBFT User Guide"
+
+[build]
+build-dir = "../target/book"
+
+[output.html]
+git-repository-url = "https://github.com/raylsnetwork/rbft"
